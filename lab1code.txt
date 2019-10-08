@@ -1,0 +1,21 @@
+.include "C:\Users\Asus\Downloads\50002\50002\nominal.jsim"
+.include "C:\Users\Asus\Downloads\50002\50002\lab1checkoff.jsim"
+
+
+.subckt F A B C Z
+
+*pull down
+MPD1 Z1 A Z3 0 NENH sw=8 sl=1
+MPD2 Z3 B 0 0 NENH sw=8 sl=1
+MPD3 Z1 C 0 0 NENH sw=8 sl=1
+
+*pull up
+MPU1 Z1 A Z2 vdd PENH sw=8 sl=1
+MPU2 Z1 B Z2 vdd PENH sw=8 sl=1
+MPU3 Z2 C vdd vdd PENH sw =8 sl=1
+
+*inverter
+MPU4 Z Z1 0 0 NENH sw=8 sl=1  
+MPD4 Z Z1 vdd vdd PENH sw=8 sl=1
+
+.ends

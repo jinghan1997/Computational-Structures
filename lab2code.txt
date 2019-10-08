@@ -1,0 +1,77 @@
+.include "C:\Users\Asus\Desktop\50002\50002\nominal.jsim"
+.include "C:\Users\Asus\Desktop\50002\50002\8clocks.jsim"
+.include "C:\Users\Asus\Desktop\50002\50002\lab2checkoff.jsim"
+
+*full bit adder
+
+
+
+*m(id) (drain) (gate) (source) (bulk)
+
+
+*inverter
+.subckt inv a z
+MPU z a 0 0 NENH sw=8 sl=1  
+MPD z a vdd vdd PENH sw=8 sl=1
+.ends
+
+.subckt nand a b z
+*pull down
+MPD1 z A Z1 0 NENH sw=8 sl=1
+MPD2 Z1 B 0 0 NENH sw=8 sl=1
+*pull up
+MPU1 z A vdd vdd PENH sw=8 sl=1
+MPU2 z B vdd vdd PENH sw=8 sl=1
+.ends
+
+.subckt nor a b z
+*pull down
+MPD1 z A 0 0 NENH sw=8 sl=1
+MPD2 z B 0 0 NENH sw=8 sl=1
+*pull up
+MPU1 z1 A vdd vdd PENH sw=8 sl=1
+MPU2 z B z1 vdd PENH sw=8 sl=1
+.ends
+
+
+
+.subckt xor a b z
+XSC1 b b1 inv
+XSC2 a a1 inv
+*pull up
+MPU1 z1 b1 vdd vdd PENH sw=4 sl=1
+MPU2 z a z1 vdd PENH sw=4 sl=1
+MPU3 z2 B vdd vdd PENH sw=4 sl=1
+MPU4 z a1 z2 vdd PENH sw=4 sl=1
+*pull down
+MPD1 z b z3 0 NENH sw=2 sl=1
+MPD2 z3 a 0 0 NENH sw=2 sl=1
+MPD3 z b1 z4 0 NENH sw=2 sl=1
+MPD4 z4 a1 0 0 NENH sw=2 sl=1
+.ends
+
+.subckt FA a b ci s co
+XSC1 a b x1 xor 
+XSC2 ci x1 x2 nand
+XSC3 a b x3 nand
+XSC4 x1 ci s xor
+XSC5 x2 x3 co nand
+.ends
+
+
+Xtest1 clk1 clk2 clk3 z z2 FA
+.tran 40ns
+.plot clk1
+.plot clk2
+.plot clk3
+.plot z
+.plot z2
+
+.subckt ADDER4 a3 a2 a1 a0 b3 b2 b1 b0 s4 s3 s2 s1 s0
+* remember the node named "0" is the ground node
+* nodes c0 through c3 are internal to the ADDER module
+Xbit0 a0 b0 0 s0 c0 FA
+Xbit1 a1 b1 c0 s1 c1 FA
+Xbit2 a2 b2 c1 s2 c2 FA
+Xbit3 a3 b3 c2 s3 s4 FA
+.ends
