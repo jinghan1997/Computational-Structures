@@ -1,0 +1,184 @@
+.include beta.uasm
+.include C:\Users\Asus\Desktop\50002\50002\lab5checkoff.uasm
+
+
+
+
+|HENG JING HAN
+
+
+
+
+count_bull_cows:                        | your subroutine must have this name
+	PUSH(LP)                            | standard subroutine entry sequence
+	PUSH(BP)
+	MOVE(SP, BP)
+
+	PUSH(R1)     | a
+	PUSH(R2)     | b
+	PUSH(R3)     | bulls	
+	PUSH(R4)     | cows
+	PUSH(R5)     | mask
+
+
+	LD(BP,-12,R1)   | load arg into a
+	LD(BP,-16,R2)   | load arg into b
+	CMOVE(0,R3)     | load bulls = 0
+	CMOVE(0,R4)     | load cows = 0
+	CMOVE(0xF,R5)   | load mask = 0xF
+	
+
+	PUSH(R6)     | counter i in firstfor
+	CMOVE(0,R6)  | load i = 0
+	PUSH(R7)     | limit n in firstfor
+	CMOVE(4,R7)  |  n = 4
+	PUSH(R8)     |just a temp resistor
+	PUSH(R9)     |just a temp resistor
+	PUSH(R10)    |just a temp resistor
+	PUSH(R11)    |just a temp resistor
+
+
+firstfor:
+	BR(firstforcheck)
+firstif:
+	AND(R5,R1,R9)
+	AND(R5,R2,R10)
+	CMPEQ(R9,R10,R11)            |checking the if
+	BNE(R11,firstifbody,R31)
+
+	SHLC(R5,4,R5)               |mask = mask << 4;
+	ADDC(R6,1,R6)               |i++
+	BR(firstforcheck)
+firstifbody:
+	ADDC(R3,1,R3)          |bulls++
+	OR(R5,R1,R1)           |a = a | mask;
+	OR(R5,R2,R2)           |b = b | mask;
+
+
+	SHLC(R5,4,R5)            |mask = mask << 4;
+	ADDC(R6,1,R6)            |i++
+	BR(firstforcheck)
+firstforcheck:
+	CMPLT(R6,R7,R8)          |firstfor condition
+	BNE(R8,firstif,R31)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	CMOVE(0,R6)     | load i = 0
+	CMOVE(4,R7)     |  n = 4
+	PUSH(R12)       |  atry
+	PUSH(R13)       | just a variable for 0XF
+	CMOVE(0xF,R13)  | 0xF
+	PUSH(R14)   |just a temp resistor
+	PUSH(R15)   |  btemp 
+	PUSH(R16)  | counter j in firstfor
+	CMOVE(0,R16)     | load j = 0
+	PUSH(R17)   |  btry 
+	PUSH(R18)   |just a temp resistor
+secondfor:
+	BR(secondforcheck)
+
+secondforbody:
+	AND(R1,R13,R12)  |atry = a & 0xF;
+	SHRC(R1,4,R1)    |a = a >> 4;
+
+secondif:
+	CMPEQ(R12,R13,R14)
+	BEQ(R14,secondifbody,R31)
+	
+	ADDC(R6,1,R6)            |i++
+	BR(secondforcheck)
+
+
+secondifbody:
+	MOVE(R2,R15)     |btemp = b;
+	CMOVE(0xF,R5)  | load mask = 0xF  
+	
+	CMOVE(0,R16)     | load j = 0
+
+	thirdfor:
+		BR(thirdforcheck)
+
+
+	thirdforbody:
+		AND(R13,R15,R17)   |btry = btemp & 0xF;
+		SHRC(R15,4,R15)    | btemp = btemp >> 4; 
+		
+		CMPEQ(R17,R12,R18)
+		BNE(R18,thirdif,R31)
+		
+		SHLC(R5,4,R5)              |mask = mask << 4;
+		ADDC(R16,1,R16)            |j++
+		BR(thirdforcheck)
+		
+		thirdif:
+			ADDC(R4,1,R4)             |cows++
+			OR(R5,R2,R2)              |b = b | mask;
+			
+			ADDC(R6,1,R6)            |i++
+			BR(secondforcheck)
+
+
+	thirdforcheck:
+		CMPLT(R16,R7,R8)                |secondfor condition
+		BNE(R8,thirdforbody,R31)
+		ADDC(R6,1,R6)                   |i++
+
+
+secondforcheck:
+	CMPLT(R6,R7,R8)                  |secondfor condition
+	BNE(R8,secondforbody,R31)        |loop back
+
+
+
+
+
+	SHLC(R3,4,R3)                       | bulls << 4
+	ADD(R3,R4,R0)                       | return (bulls << 4) + cows
+
+
+
+
+
+
+	POP(R18)
+	POP(R17)
+	POP(R16)
+	POP(R15)
+	POP(R14)
+	POP(R13)
+	POP(R12)
+	POP(R11)
+	POP(R10)
+	POP(R9)
+	POP(R8)
+	POP(R7)
+	POP(R6)
+	POP(R5)
+	POP(R4)
+	POP(R3)
+	POP(R2)
+	POP(R1)
+
+	MOVE(BP,SP)                         | standard subroutine exit sequence
+	POP(BP)
+	POP(LP)
+	RTN()
+
+StackBase: LONG(.+4) | Pointer to bottom of stack
+. = .+0x1000 | Reserve space for stack...
