@@ -1,0 +1,575 @@
+.include "C:\Users\Asus\Desktop\50002\50002\nominal.jsim"
+.include "C:\Users\Asus\Desktop\50002\50002\stdcell.jsim"
+*.include "C:\Users\Asus\Desktop\50002\50002\lab6pc.jsim"
+*.include "C:\Users\Asus\Desktop\50002\50002\lab6regfile.jsim"
+*.include "C:\Users\Asus\Desktop\50002\50002\lab6ctl.jsim“
+*.include "C:\Users\Asus\Desktop\50002\50002\lab6basicblock.jsim"
+.include "C:\Users\Asus\Desktop\50002\50002\lab6checkoff.jsim"
+
+.subckt mux5 sel2 sel1 sel0 in0 in1 in2 in3 in4 outactual
+*                           000 001 010 011 100 
+X1 sel0 sel1 in0 in1 in2 in3 out1 mux4
+X2 sel2 out1 in4 outactual mux2
+.ends
+
+*-----------------------------------------------------------------------PC------------------------------------------------------------------------------
+.subckt pc clk reset pcsel[2:0] xadr[31:0] illop[31:0] jt[31:0] c[31:0] ia[31:0] afterAddFourC[31:0] afterAddFour[31:0]
+
+*part A part 3
+Xand ia[31] jt[31] supervisorbitpc31 and2   
+
+* PC + 4 
+.connect 0 constantOfFour[31:3]
+.connect vdd constantOfFour[2]
+.connect 0 constantOfFour[1:0]
+X1 ia[31:0] constantOfFour[31:0] afterAddFour[31:0] adder4pc
+
+* PC + 4 + 4 x SXT(C)
+X2 afterAddFour[0] 0 0 afterAddFourC[0] afterAddFourCcarry[0] FA
+X3 afterAddFour[1] 0 afterAddFourCcarry[0] afterAddFourC[1] afterAddFourCcarry[1] FA
+X4 afterAddFour[31:2] c[29:0] afterAddFourCcarry[30:1] afterAddFourC[31:2] afterAddFourCcarry[31:2] FA
+
+*MUX5                                 000                  001                             010             011          100              output
+Xmux5 pcsel2#32 pcsel1#32 pcsel0#32 afterAddFour[31:0] afterAddFourC[31:0] supervisorbitpc31 jt[30:2] 0#2 illop[31:0] xadr[31:0] outputwithoutreset[31:0] mux5
+
+*reset, if reset, reset to 80000000
+Xreset reset#32 outputwithoutreset[31:0] vdd 0#31 output[31:0] mux2    
+ 
+*on clk rise, d -> q, output -> ia
+Xreg output[31:0] clk#32 ia[31:0] dreg
+.ends
+
+
+
+*-------------------------------------------------------------------------regfile----------------------------------------------------------------------------
+.subckt regfile clk werf ra2sel ra[4:0] rb[4:0] rc[4:0]
++ wdata[31:0] radata[31:0] rbdata[31:0] wasel
+*… your register file circuit here …
+
+Xregfile
++ vdd 0 0 ra[4:0] adata[31:0] // A read port
++ vdd 0 0 ra2mux[4:0] bdata[31:0] // B read port
++ 0 clk werf actualrc[4:0] wdata[31:0] // write port
++ $memory width=32 nlocations=31
+
+*for b read port
+Xmuxrbrc ra2sel#5 rb[4:0] rc[4:0] ra2mux[4:0] mux2
+
+XcheckAZero1 ra4 ra3 ra2 ra1 raout1 and4
+XcheckAZero2 ra0 raout1 raout2 and2
+XcheckBCZero1 ra2mux4 ra2mux3 ra2mux2 ra2mux1 rbcout1 and4
+XcheckBCZero2 ra2mux0 rbcout1 rbcout2 and2
+
+*MUX2 select choices 0  1
+Xmuxra raout2#32 adata[31:0] 0#32 radata[31:0] mux2
+Xmuxrbc rbcout2#32 bdata[31:0] 0#32 rbdata[31:0] mux2
+
+*to make register 30 for XP, 11110
+.connect xp[4:1] vdd
+.connect xp0 0 
+
+*part B wasel
+Xwasel wasel#5 rc[4:0] xp[4:0] actualrc[4:0] mux2
+.ends
+
+*------------------------------------------------------------------------control logic unit-----------------------------------------------------------------------------
+.subckt ctl reset z id[31:26] ra2sel bsel alufn[5:0] wdsel[1:0] werf moe wr pcsel[2:0] wasel asel
+*… your control circuit here …
+
+* forces WR to 0 when RESET = 1
+*MUX2 select choices 0  1
+X1 reset xwr 0 wr mux2   
+
+*GUIDE: 
+*from the lab handout, set all pcsel[2:0] wasel asel to be 0
+*for unimplemented instructions, set WERF to be 0
+*whenever type 2 (OPC) is involved(eg. ADDC, COMPLTC), BSEL = 1, otherwise its 0
+*memory output enable (moe, output). Set to 1 when the Beta wants the memory to read the memory location specified by ma[31:0].(LD)
+*memory write enable (wr, output). Set to 1 when the Beta wants to store into the memory location specified by ma[31:0] at the end of the current cycle. (ST) 
+*WERF is when u need to store value in register, basically all math and logic operations
+*wdsel is all 01 except for LD which is 10 and ST which is 00
+*wdsel 01 means i want to get the output from the ALU instead of from data memory
+
+
+Xctl vdd 0 0 id[31:26] // one read port
++ bpcsel[2:0] wasel asel ra2sel bsel alufn[5:0] wdsel[1:0] werf moe xwr
++ $memory width=18 nlocations=64 contents=(
++ 0b011100000000000100 // opcode=0b000000
++ 0b011100000000000100 // opcode=0b000001
++ 0b011100000000000100 // opcode=0b000010
++ 0b011100000000000100 // opcode=0b000011
++ 0b011100000000000100 // opcode=0b000100
++ 0b011100000000000100 // opcode=0b000101
++ 0b011100000000000100 // opcode=0b000110
++ 0b011100000000000100 // opcode=0b000111
++ 0b011100000000000100 // opcode=0b001000
++ 0b011100000000000100 // opcode=0b001001
++ 0b011100000000000100 // opcode=0b001010
++ 0b011100000000000100 // opcode=0b001011
++ 0b011100000000000100 // opcode=0b001100
++ 0b011100000000000100 // opcode=0b001101
++ 0b011100000000000100 // opcode=0b001110
++ 0b011100000000000100 // opcode=0b001111
++ 0b011100000000000100 // opcode=0b010000
++ 0b011100000000000100 // opcode=0b010001
++ 0b011100000000000100 // opcode=0b010010
++ 0b011100000000000100 // opcode=0b010011
++ 0b011100000000000100 // opcode=0b010100
++ 0b011100000000000100 // opcode=0b010101
++ 0b011100000000000100 // opcode=0b010110
++ 0b011100000000000100 // opcode=0b010111
++ 0b000000100000010110 // opcode=0b011000   LD
++ 0b000001100000000001 // opcode=0b011001   ST
++ 0b011100000000000100 // opcode=0b011010
++ 0b010000000000000100 // opcode=0b011011   JMP
++ 0b011100000000000100 // opcode=0b011100
++ 0b000011100000000100 // opcode=0b011101   BEQ
++ 0b000011100000000100 // opcode=0b011110   BNE
++ 0b000011101101010110 // opcode=0b011111   LDR(step 2 only)
++ 0b000000000000001100 // opcode=0b100000   ADD
++ 0b000000000000101100 // opcode=0b100001   SUB
++ 0b011100000000000100 // opcode=0b100010
++ 0b011100000000000100 // opcode=0b100011
++ 0b000000011001101100 // opcode=0b100100   CMPEQ
++ 0b000000011010101100 // opcode=0b100101   CMPLT
++ 0b000000011011101100 // opcode=0b100110   CMPLE
++ 0b011100000000000100 // opcode=0b100111
++ 0b000000001100001100 // opcode=0b101000   AND
++ 0b000000001111001100 // opcode=0b101001   OR
++ 0b000000001011001100 // opcode=0b101010   XOR
++ 0b011100000000000100 // opcode=0b101011
++ 0b000000010000001100 // opcode=0b101100   SHL
++ 0b000000010000101100 // opcode=0b101101   SHR
++ 0b000000010001101100 // opcode=0b101110   SRA
++ 0b011100000000000100 // opcode=0b101111
++ 0b000000100000001100 // opcode=0b110000   ADDC
++ 0b000000100000101100 // opcode=0b110001   SUBC
++ 0b011100000000000100 // opcode=0b110010
++ 0b011100000000000100 // opcode=0b110011
++ 0b000000111001101100 // opcode=0b110100   CMPEQC
++ 0b000000111010101100 // opcode=0b110101   CMPLTC
++ 0b000000111011101100 // opcode=0b110110   CMPLEC
++ 0b011100000000000100 // opcode=0b110111
++ 0b000000101100001100 // opcode=0b111000   ANDC
++ 0b000000101111001100 // opcode=0b111001   ORC
++ 0b000000101011001100 // opcode=0b111010   XORC
++ 0b011100000000000100 // opcode=0b111011
++ 0b000000110000001100 // opcode=0b111100   SHLC
++ 0b000000110000101100 // opcode=0b111101   SHRC
++ 0b000000110001101100 // opcode=0b111110   SRAC
++ 0b011100000000000100 // opcode=0b111111
++ )
+
+*how to use the "Z" signal
+Xnot id[31] invv inverter                     //to invert the first bit as BEQ(011101) and BNE(011110)
+Xand invv id[30] id[29] id[28] nojmp2 and4     //to cancel out JMP as JMP(011011)
+Xor id[27] id[26] noldr xor2                   //to cancel out LDR AS LDR(011111)
+Xnor id[26] z diff xnor2                      //to differentiate BEQ and BNE
+Xout nojmp2 noldr diff vdd eqORne and4         //actual cancellation happens here, not BEQ or BNE will produce 0
+Xpcsel eqORne#3 bpcsel[2:0] 0#2 vdd pcsel[2:0] mux2   //change PC to 001 if its BEQ or BNE, else stays the same
+.ends
+
+
+
+
+
+
+*-------------------------------------------------------------------------------beta----------------------------------------------------------------------
+.subckt beta clk reset irq ia[31:0] id[31:0] ma[31:0]
++ moe mrd[31:0] wr mwd[31:0]
+*… your circuit here …
+
+*80000008
+Xxadr vdd 0#27 vdd 0#3 xadr[31:0] buffer  
+*80000004
+XillegalOp vdd 0#28 vdd 0#2 illop[31:0] buffer
+
+*program counter
+XPC clk reset pcsel[2:0] xadr[31:0] illop[31:0] radata[31:0] literal32a[31:0] ia[31:0] plusc[31:0] plusfour[31:0] pc
+
+*register file
+Xr clk werf ra2sel id[20:16] id[15:11] id[25:21] wdata[31:0] radata[31:0] rbdata[31:0] wasel regfile
+
+*control logic
+Xc reset z id[31:26] ra2sel bsel alufn[5:0] xwdsel[1:0] xwerf moe xwr xpcsel[2:0] xwasel asel ctl
+
+
+
+* to get z, check for 0 in radata
+XZ1 radata[7:0] radata[15:8] radata[23:16] radata[31:24] zzz[7:0] or4
+XZ2 zzz[1:0] zzz[3:2] zzz[5:4] zzz[7:6] zzz2[1:0] or4
+XZ3 zzz2[0] zzz2[1] z nor2
+
+
+*interrupt, FROM PART F 1,2,3,4,5
+X1 ia[31] mode inverter
+X2 irq mode actualirq and2                //to check for actual interruption, if its 1, there is interruption
+X3 actualirq#3 xpcsel[2:0] vdd 0#2 pcsel[2:0] mux2    // PART 1 to change pcsel to 4 for Xadr
+X4 actualirq xwasel vdd wasel mux2            // PART 2 to set wasel as 1 for writing to Xp
+X5 actualirq xwerf vdd werf mux2        // PART 3 to set werf as 1 
+X6 actualirq#2 xwdsel[1:0] 0#2 wdsel[1:0] mux2      // PART 4 change wdsel to 0 for writing of pc+4
+X7 actualirq xwr 0 wr mux2   // PART 5 change wr to 0
+
+
+
+
+
+*asel output
+Xasel1 asel#32 radata[31:0] 0 plusc[30:0] outasel[31:0] mux2 
+
+
+
+*bsel output
+Xbsel1 bsel#32 rbdata[31:0] literal32a[31:0] outbsel[31:0] mux2   
+
+
+
+Xc1 one constant1
+
+*connect 32 bit bdata from register file to memory write data 
+*MUX2 select choices 0  1
+Xconnect one#32 0#32 rbdata[31:0] mwd[31:0] mux2  
+
+*BSEL mux: The low-order 16 bits of the instruction need to be sign-extended to 32 bits. 
+*Signextension is easy in hardware! 
+*Just connect inst[15:0] to the low-order sixteen D1 inputs of the
+*mux and inst15 to each of the high-order sixteen D1 inputs.
+*MUX2 select choices 0  1
+Xliteral1 one#16 0#16 id[15:0] literal32a[15:0] mux2
+Xliteral2 id15#16 0#16 one#16 literal32a[31:16] mux2
+
+*alu output
+Xalu alufn[5:0] outasel[31:0] outbsel[31:0] ma[31:0] z2 v n alu   
+
+*wdsel output
+*MUX4 select choices             00    10        01      11
+Xwdsel1 wdsel[1]#32 wdsel[0]#32 ia[31] plusfour[30:0] mrd[31:0] ma[31:0] 0#32 wdata[31:0] mux4 
+.ends
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+*---------------------------------------------------------data from previous lab--------------------------------------------------------------------------------------------
+
+
+*1 bit full adder from previous lab
+.subckt FA a b ci s co
+XSC1 a b x1 xor2 
+XSC2 ci x1 x2 nand2
+XSC3 a b x3 nand2
+XSC4 x1 ci s xor2
+XSC5 x2 x3 co nand2
+.ends
+
+.subckt adder4pc a[31:0] b[31:0] s[31:0]
+X1 a0 b0 0 s0 c0 FA
+x2 a[31:1] b[31:1] c[30:0] s[31:1] c[31:1] FA
+.ends
+
+*32 bit ADDER
+*input A and B, output is S  
+*Z if all S are zero, V if operation overflow, N if S is negative
+.subckt adder32 ALUFN[0] A[31:0] B[31:0] S[31:0] z v n
+XR B[31:0] ALUFN[0]#32 rel[31:0] xor2
+*rel is out right after the only xor gate
+
+*to force the carry in to be 1 in the case it is a subtraction
+XADDER1 A[0] rel[0] ALUFN[0] S[0] C[0] FA
+
+*now both A and B have the correct value to be added
+XADDER2 A[31:1] rel[31:1] C[30:0] S[31:1] C[31:1] FA
+
+
+*V & N
+*invert all
+X1 A[31] An inverter
+X2 rel[31] Bn inverter
+X3 S[31] Sn inverter
+
+*the V equation, true is operation overflow
+X4 A[31] rel[31] Sn leftSide and3
+X5 An Bn S[31] rightSide and3
+X6 leftSide rightSide v or2
+
+*N, true if S is negative. (if S is negative the MSB will be 1, else 0)
+.connect S[31] n
+
+*Z, true if all of S are zero. Keep putting all S into OR gates, then through a NOR gate at the end
+XZ1OR S[15:0] S[31:16] r1[15:0] or2
+XZ2OR r1[7:0] r1[15:8] r2[7:0] or2
+XZ3OR r2[3:0] r2[7:4] r3[3:0] or2
+XZ4OR r3[1:0] r3[3:2] r4[1:0] or2
+XZ5OR r4[0] r4[1] r5 or2
+XZ6OR r5 z inverter
+
+.ends
+
+
+
+
+*32 bit COMPARE
+.subckt compare32 ALUFN[2:1] z v n cmp[31:0]
+Xid cmp[31:1] constant0
+X1 n v rel1 xor2
+X2 z rel1 rel2 or2
+
+*MUX4 select choices      00  10  01 11
+X3 ALUFN[2] ALUFN[1] 0 rel1 z rel2 cmp[0] mux4
+.ends
+
+
+
+
+
+
+*32 bit BOOLEAN
+.subckt boole32 ALUFN[3:0] A[31:0] B[31:0] boole[31:0]
+
+*MUX4 select choices      00  10  01 11
+X A[31:0] B[31:0] ALUFN[0]#32 ALUFN[1]#32 ALUFN[2]#32 ALUFN[3]#32 boole[31:0] mux4
+.ends
+
+
+
+
+
+*32 bit SHIFTER
+.subckt shift32 ALUFN[1:0] A[31:0] B[4:0] shift[31:0]
+
+*MUX2 select choices 0  1
+
+*shift left, replace missing bits with zero
+XLEFT4 B[4]#32 A[31:0] A[15:0] 0#16 r1[31:0] mux2
+XLEFT3 B[3]#32 r1[31:0] r1[23:0] 0#8 r2[31:0] mux2
+XLEFT2 B[2]#32 r2[31:0] r2[27:0] 0#4 r3[31:0] mux2
+XLEFT1 B[1]#32 r3[31:0] r3[29:0] 0#2 r4[31:0] mux2
+XLEFT0 B[0]#32 r4[31:0] r4[30:0] 0 SHL[31:0] mux2
+
+*shift right, replace missing bits with zero
+XRIGHT4 B[4]#32 A[31:0] 0#16 A[31:16] r5[31:0] mux2
+XRIGHT3 B[3]#32 r5[31:0] 0#8 r5[31:8] r6[31:0] mux2
+XRIGHT2 B[2]#32 r6[31:0] 0#4 r6[31:4] r7[31:0] mux2
+XRIGHT1 B[1]#32 r7[31:0] 0#2 r7[31:2] r8[31:0] mux2
+XRIGHT0 B[0]#32 r8[31:0] 0 r8[31:1] SHR[31:0] mux2
+
+*shift right with sign extension, replace missin bits with A[31]
+XRIGHTWSE4 B[4]#32 A[31:0] A[31]#16 A[31:16] r9[31:0] mux2
+XRIGHTWSE3 B[3]#32 r9[31:0] r9[31]#8 r9[31:8] rr1[31:0] mux2
+XRIGHTWSE2 B[2]#32 rr1[31:0] rr1[31]#4 rr1[31:4] rr2[31:0] mux2
+XRIGHTWSE1 B[1]#32 rr2[31:0] rr2[31]#2 rr2[31:2] rr3[31:0] mux2
+XRIGHTWSE0 B[0]#32 rr3[31:0] rr3[31] rr3[31:1] SRA[31:0] mux2
+
+*MUX4 select choices           00        10     01      11
+XA ALUFN[0]#32 ALUFN[1]#32 SHL[31:0] SHR[31:0] 0#32 SRA[31:0] shift[31:0] mux4
+.ends
+
+
+
+*part E)
+*arithmetic logic unit
+.subckt alu ALUFN[5:0] A[31:0] B[31:0] alu[31:0] z v n
+
+XADDER ALUFN[0] A[31:0] B[31:0] S[31:0] z v n adder32
+XBOOLEAN ALUFN[3:0] A[31:0] B[31:0] boole[31:0] boole32
+XSHIFT ALUFN[1:0] A[31:0] B[4:0] shift[31:0] shift32
+XCOMPARE ALUFN[2:1] z v n cmp[31:0] compare32
+XMULTIPLY A[31:0] B[31:0] P[31:0] multiply32
+
+X11 ALUFN[1]#32 S[31:0] P[31:0] aaa[31:0] mux2 
+
+*all the different outputs come tgt here
+*MUX4 select choices              00        10          01         11      output
+XFINAL ALUFN[4]#32 ALUFN[5]#32 aaa[31:0] boole[31:0] shift[31:0] cmp[31:0] alu[31:0] mux4
+.ends
+
+
+.subckt multiply32 A[31:0] B[31:0] P[31:0]
+
+XLAYER1 A[31:0] B0#32 SUMLAYER1q[31:0] and2
+
+XLAYER2 A[30:0] B1#31 LAYER2a[30:0] and2
+XLAYER2a SUMLAYER1q[1] LAYER2a[0] 0 SUMLAYER2q[0] CARRYLAYER2q[1] FA
+XLAYER2aa SUMLAYER1q[31:2] LAYER2a[30:1] CARRYLAYER2q[30:1] SUMLAYER2q[30:1] CARRYLAYER2q[31:2] FA
+
+XLAYER3 A[29:0] B2#30 LAYER3a[29:0] and2
+XLAYER3a SUMLAYER2q[1] LAYER3a[0] 0 SUMLAYER3q[0] CARRYLAYER3q[1] FA
+XLAYER3aa SUMLAYER2q[30:2] LAYER3a[29:1] CARRYLAYER3q[29:1] SUMLAYER3q[29:1] CARRYLAYER3q[30:2] FA
+
+XLAYER4 A[28:0] B3#29 LAYER4a[28:0] and2
+XLAYER4a SUMLAYER3q[1] LAYER4a[0] 0 SUMLAYER4q[0] CARRYLAYER4q[1] FA
+XLAYER4aa SUMLAYER3q[29:2] LAYER4a[28:1] CARRYLAYER4q[28:1] SUMLAYER4q[28:1] CARRYLAYER4q[29:2] FA
+
+XLAYER5 A[27:0] B4#28 LAYER5a[27:0] and2
+XLAYER5a SUMLAYER4q[1] LAYER5a[0] 0 SUMLAYER5q[0] CARRYLAYER5q[1] FA
+XLAYER5aa SUMLAYER4q[28:2] LAYER5a[27:1] CARRYLAYER5q[27:1] SUMLAYER5q[27:1] CARRYLAYER5q[28:2] FA
+
+XLAYER6 A[26:0] B5#27 LAYER6a[26:0] and2
+XLAYER6a SUMLAYER5q[1] LAYER6a[0] 0 SUMLAYER6q[0] CARRYLAYER6q[1] FA
+XLAYER6aa SUMLAYER5q[27:2] LAYER6a[26:1] CARRYLAYER6q[26:1] SUMLAYER6q[26:1] CARRYLAYER6q[27:2] FA
+
+XLAYER7 A[25:0] B6#26 LAYER7a[25:0] and2
+XLAYER7a SUMLAYER6q[1] LAYER7a[0] 0 SUMLAYER7q[0] CARRYLAYER7q[1] FA
+XLAYER7aa SUMLAYER6q[26:2] LAYER7a[25:1] CARRYLAYER7q[25:1] SUMLAYER7q[25:1] CARRYLAYER7q[26:2] FA
+
+XLAYER8 A[24:0] B7#25 LAYER8a[24:0] and2
+XLAYER8a SUMLAYER7q[1] LAYER8a[0] 0 SUMLAYER8q[0] CARRYLAYER8q[1] FA
+XLAYER8aa SUMLAYER7q[25:2] LAYER8a[24:1] CARRYLAYER8q[24:1] SUMLAYER8q[24:1] CARRYLAYER8q[25:2] FA
+
+XLAYER9 A[23:0] B8#24 LAYER9a[23:0] and2
+XLAYER9a SUMLAYER8q[1] LAYER9a[0] 0 SUMLAYER9q[0] CARRYLAYER9q[1] FA
+XLAYER9aa SUMLAYER8q[24:2] LAYER9a[23:1] CARRYLAYER9q[23:1] SUMLAYER9q[23:1] CARRYLAYER9q[24:2] FA
+
+XLAYER10 A[22:0] B9#23 LAYER10a[22:0] and2
+XLAYER10a SUMLAYER9q[1] LAYER10a[0] 0 SUMLAYER10q[0] CARRYLAYER10q[1] FA
+XLAYER10aa SUMLAYER9q[23:2] LAYER10a[22:1] CARRYLAYER10q[22:1] SUMLAYER10q[22:1] CARRYLAYER10q[23:2] FA
+
+XLAYER11 A[21:0] B10#22 LAYER11a[21:0] and2
+XLAYER11a SUMLAYER10q[1] LAYER11a[0] 0 SUMLAYER11q[0] CARRYLAYER11q[1] FA
+XLAYER11aa SUMLAYER10q[22:2] LAYER11a[21:1] CARRYLAYER11q[21:1] SUMLAYER11q[21:1] CARRYLAYER11q[22:2] FA
+
+XLAYER12 A[20:0] B11#21 LAYER12a[20:0] and2
+XLAYER12a SUMLAYER11q[1] LAYER12a[0] 0 SUMLAYER12q[0] CARRYLAYER12q[1] FA
+XLAYER12aa SUMLAYER11q[21:2] LAYER12a[20:1] CARRYLAYER12q[20:1] SUMLAYER12q[20:1] CARRYLAYER12q[21:2] FA
+
+XLAYER13 A[19:0] B12#20 LAYER13a[19:0] and2
+XLAYER13a SUMLAYER12q[1] LAYER13a[0] 0 SUMLAYER13q[0] CARRYLAYER13q[1] FA
+XLAYER13aa SUMLAYER12q[20:2] LAYER13a[19:1] CARRYLAYER13q[19:1] SUMLAYER13q[19:1] CARRYLAYER13q[20:2] FA
+
+XLAYER14 A[18:0] B13#19 LAYER14a[18:0] and2
+XLAYER14a SUMLAYER13q[1] LAYER14a[0] 0 SUMLAYER14q[0] CARRYLAYER14q[1] FA
+XLAYER14aa SUMLAYER13q[19:2] LAYER14a[18:1] CARRYLAYER14q[18:1] SUMLAYER14q[18:1] CARRYLAYER14q[19:2] FA
+
+XLAYER15 A[17:0] B14#18 LAYER15a[17:0] and2
+XLAYER15a SUMLAYER14q[1] LAYER15a[0] 0 SUMLAYER15q[0] CARRYLAYER15q[1] FA
+XLAYER15aa SUMLAYER14q[18:2] LAYER15a[17:1] CARRYLAYER15q[17:1] SUMLAYER15q[17:1] CARRYLAYER15q[18:2] FA
+
+XLAYER16 A[16:0] B15#17 LAYER16a[16:0] and2
+XLAYER16a SUMLAYER15q[1] LAYER16a[0] 0 SUMLAYER16q[0] CARRYLAYER16q[1] FA
+XLAYER16aa SUMLAYER15q[17:2] LAYER16a[16:1] CARRYLAYER16q[16:1] SUMLAYER16q[16:1] CARRYLAYER16q[17:2] FA
+
+XLAYER17 A[15:0] B16#16 LAYER17a[15:0] and2
+XLAYER17a SUMLAYER16q[1] LAYER17a[0] 0 SUMLAYER17q[0] CARRYLAYER17q[1] FA
+XLAYER17aa SUMLAYER16q[16:2] LAYER17a[15:1] CARRYLAYER17q[15:1] SUMLAYER17q[15:1] CARRYLAYER17q[16:2] FA
+
+XLAYER18 A[14:0] B17#15 LAYER18a[14:0] and2
+XLAYER18a SUMLAYER17q[1] LAYER18a[0] 0 SUMLAYER18q[0] CARRYLAYER18q[1] FA
+XLAYER18aa SUMLAYER17q[15:2] LAYER18a[14:1] CARRYLAYER18q[14:1] SUMLAYER18q[14:1] CARRYLAYER18q[15:2] FA
+
+XLAYER19 A[13:0] B18#14 LAYER19a[13:0] and2
+XLAYER19a SUMLAYER18q[1] LAYER19a[0] 0 SUMLAYER19q[0] CARRYLAYER19q[1] FA
+XLAYER19aa SUMLAYER18q[14:2] LAYER19a[13:1] CARRYLAYER19q[13:1] SUMLAYER19q[13:1] CARRYLAYER19q[14:2] FA
+
+XLAYER20 A[12:0] B19#13 LAYER20a[12:0] and2
+XLAYER20a SUMLAYER19q[1] LAYER20a[0] 0 SUMLAYER20q[0] CARRYLAYER20q[1] FA
+XLAYER20aa SUMLAYER19q[13:2] LAYER20a[12:1] CARRYLAYER20q[12:1] SUMLAYER20q[12:1] CARRYLAYER20q[13:2] FA
+
+XLAYER21 A[11:0] B20#12 LAYER21a[11:0] and2
+XLAYER21a SUMLAYER20q[1] LAYER21a[0] 0 SUMLAYER21q[0] CARRYLAYER21q[1] FA
+XLAYER21aa SUMLAYER20q[12:2] LAYER21a[11:1] CARRYLAYER21q[11:1] SUMLAYER21q[11:1] CARRYLAYER21q[12:2] FA
+
+XLAYER22 A[10:0] B21#11 LAYER22a[10:0] and2
+XLAYER22a SUMLAYER21q[1] LAYER22a[0] 0 SUMLAYER22q[0] CARRYLAYER22q[1] FA
+XLAYER22aa SUMLAYER21q[11:2] LAYER22a[10:1] CARRYLAYER22q[10:1] SUMLAYER22q[10:1] CARRYLAYER22q[11:2] FA
+
+XLAYER23 A[9:0] B22#10 LAYER23a[9:0] and2
+XLAYER23a SUMLAYER22q[1] LAYER23a[0] 0 SUMLAYER23q[0] CARRYLAYER23q[1] FA
+XLAYER23aa SUMLAYER22q[10:2] LAYER23a[9:1] CARRYLAYER23q[9:1] SUMLAYER23q[9:1] CARRYLAYER23q[10:2] FA
+
+XLAYER24 A[8:0] B23#9 LAYER24a[8:0] and2
+XLAYER24a SUMLAYER23q[1] LAYER24a[0] 0 SUMLAYER24q[0] CARRYLAYER24q[1] FA
+XLAYER24aa SUMLAYER23q[9:2] LAYER24a[8:1] CARRYLAYER24q[8:1] SUMLAYER24q[8:1] CARRYLAYER24q[9:2] FA
+
+XLAYER25 A[7:0] B24#8 LAYER25a[7:0] and2
+XLAYER25a SUMLAYER24q[1] LAYER25a[0] 0 SUMLAYER25q[0] CARRYLAYER25q[1] FA
+XLAYER25aa SUMLAYER24q[8:2] LAYER25a[7:1] CARRYLAYER25q[7:1] SUMLAYER25q[7:1] CARRYLAYER25q[8:2] FA
+
+XLAYER26 A[6:0] B25#7 LAYER26a[6:0] and2
+XLAYER26a SUMLAYER25q[1] LAYER26a[0] 0 SUMLAYER26q[0] CARRYLAYER26q[1] FA
+XLAYER26aa SUMLAYER25q[7:2] LAYER26a[6:1] CARRYLAYER26q[6:1] SUMLAYER26q[6:1] CARRYLAYER26q[7:2] FA
+
+XLAYER27 A[5:0] B26#6 LAYER27a[5:0] and2
+XLAYER27a SUMLAYER26q[1] LAYER27a[0] 0 SUMLAYER27q[0] CARRYLAYER27q[1] FA
+XLAYER27aa SUMLAYER26q[6:2] LAYER27a[5:1] CARRYLAYER27q[5:1] SUMLAYER27q[5:1] CARRYLAYER27q[6:2] FA
+
+XLAYER28 A[4:0] B27#5 LAYER28a[4:0] and2
+XLAYER28a SUMLAYER27q[1] LAYER28a[0] 0 SUMLAYER28q[0] CARRYLAYER28q[1] FA
+XLAYER28aa SUMLAYER27q[5:2] LAYER28a[4:1] CARRYLAYER28q[4:1] SUMLAYER28q[4:1] CARRYLAYER28q[5:2] FA
+
+XLAYER29 A[3:0] B28#4 LAYER29a[3:0] and2
+XLAYER29a SUMLAYER28q[1] LAYER29a[0] 0 SUMLAYER29q[0] CARRYLAYER29q[1] FA
+XLAYER29aa SUMLAYER28q[4:2] LAYER29a[3:1] CARRYLAYER29q[3:1] SUMLAYER29q[3:1] CARRYLAYER29q[4:2] FA
+
+XLAYER30 A[2:0] B29#3 LAYER30a[2:0] and2
+XLAYER30a SUMLAYER29q[1] LAYER30a[0] 0 SUMLAYER30q[0] CARRYLAYER30q[1] FA
+XLAYER30aa SUMLAYER29q[3:2] LAYER30a[2:1] CARRYLAYER30q[2:1] SUMLAYER30q[2:1] CARRYLAYER30q[3:2] FA
+
+XLAYER31 A[1:0] B30#2 LAYER31a[1:0] and2
+XLAYER31a SUMLAYER30q[1] LAYER31a[0] 0 SUMLAYER31q[0] CARRYLAYER31q[1] FA
+XLAYER31aa SUMLAYER30q[2:2] LAYER31a[1:1] CARRYLAYER31q[1:1] SUMLAYER31q[1:1] CARRYLAYER31q[2:2] FA
+
+XLAYER32 A[0] B31#1 LAYER32a[0] and2
+XLAYER32a SUMLAYER31q[1] LAYER32a[0] 0 SUMLAYER32q[0] CARRYLAYER32q[1] FA
+
+
+
+*somehow i cant do this   .connect P[31:0] SUMLAYER[32:1]q[0]
+*idk why
+
+
+.connect P0 SUMLAYER1q[0]
+.connect P1 SUMLAYER2q[0]
+.connect P2 SUMLAYER3q[0]
+.connect P3 SUMLAYER4q[0]
+.connect P4 SUMLAYER5q[0]
+.connect P5 SUMLAYER6q[0]
+.connect P6 SUMLAYER7q[0]
+.connect P7 SUMLAYER8q[0]
+.connect P8 SUMLAYER9q[0]
+.connect P9 SUMLAYER10q[0]
+.connect P10 SUMLAYER11q[0]
+.connect P11 SUMLAYER12q[0]
+.connect P12 SUMLAYER13q[0]
+.connect P13 SUMLAYER14q[0]
+.connect P14 SUMLAYER15q[0]
+.connect P15 SUMLAYER16q[0]
+.connect P16 SUMLAYER17q[0]
+.connect P17 SUMLAYER18q[0]
+.connect P18 SUMLAYER19q[0]
+.connect P19 SUMLAYER20q[0]
+.connect P20 SUMLAYER21q[0]
+.connect P21 SUMLAYER22q[0]
+.connect P22 SUMLAYER23q[0]
+.connect P23 SUMLAYER24q[0]
+.connect P24 SUMLAYER25q[0]
+.connect P25 SUMLAYER26q[0]
+.connect P26 SUMLAYER27q[0]
+.connect P27 SUMLAYER28q[0]
+.connect P28 SUMLAYER29q[0]
+.connect P29 SUMLAYER30q[0]
+.connect P30 SUMLAYER31q[0]
+.connect P31 SUMLAYER32q[0]
+
+
+
+.ends
